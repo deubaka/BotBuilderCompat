@@ -197,6 +197,64 @@ export class SlackBot extends collection.DialogCollection {
         return this;
     }
 
+    public listenForMentionsAndDirectMessages(dialogId?: string, dialogArgs?: any): this {
+        var sessions: { [key: string]: ISessionState; } = {};
+        var dispatch = (bot: Bot, msg: ISlackMessage, ss?: ISessionState) => {
+            bot.identifyTeam((err, teamId) => {
+                msg.team = teamId;
+                this.dispatchMessage(bot, msg, dialogId, dialogArgs, ss);
+            });
+        };
+        
+        dialogId = dialogId || this.options.defaultDialogId;
+        dialogArgs = dialogArgs || this.options.defaultDialogArgs;
+        this.controller.on('direct_message', (bot: Bot, msg: ISlackMessage) => {
+            var key = msg.channel + ':' + msg.user;
+
+            if (sessions.hasOwnProperty(key)) {
+                // Validate session
+                var existingSession = sessions[key];
+                // Session exist and still valid, just resume
+                if (existingSession.callstack && existingSession.callstack.length > 0 && (new Date().getTime() - existingSession.lastAccess) <= this.options.ambientMentionDuration) {
+                    dispatch(bot, msg, existingSession);
+                } else {
+                    // Session exists but already invalid, so delete old and create a new one
+                    delete sessions[key];
+                    
+                    var newSession = sessions[key] = { callstack: <any>[], lastAccess: new Date().getTime() };
+                    dispatch(bot, msg, newSession);
+                }
+            }
+            else {
+                // Session is not existing, so create a new one
+                var newSession = sessions[key] = { callstack: <any>[], lastAccess: new Date().getTime() };
+                dispatch(bot, msg, newSession);
+            }
+        });
+        ['direct_mention','mention'].forEach((type) => {
+            this.controller.on(type, (bot: Bot, msg: ISlackMessage) => {
+                // Create a new session
+                var key = msg.channel + ':' + msg.user;
+                var ss = sessions[key] = { callstack: <any>[], lastAccess: new Date().getTime() };
+                dispatch(bot, msg, ss);
+            });
+        });
+        this.controller.on('ambient', (bot: Bot, msg: ISlackMessage) => {
+            // Conditionally dispatch the message
+            var key = msg.channel + ':' + msg.user;
+            if (sessions.hasOwnProperty(key)) {
+                // Validate session
+                var ss = sessions[key];
+                if (ss.callstack && ss.callstack.length > 0 && (new Date().getTime() - ss.lastAccess) <= this.options.ambientMentionDuration) {
+                    dispatch(bot, msg, ss);
+                } else {
+                    delete sessions[key];
+                }
+            }
+        });
+        return this;
+    }
+
     public beginDialog(address: ISlackBeginDialogAddress, dialogId: string, dialogArgs?: any): this {
         // Validate args
         if (!address.channel) {
