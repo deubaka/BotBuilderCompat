@@ -39,9 +39,9 @@ import mb = require('../Message');
 import Channel = require('../Channel');
 import dc = require('./DialogCollection');
 
-export enum PromptType { text, number, confirm, choice, time, attachment }
+export enum PromptType { text, number, confirm, choice, time, attachment, interactive }
 
-export enum ListStyle { none, inline, list, button, auto }
+export enum ListStyle { none, inline, list, button, auto, interactive }
 
 export interface IPromptOptions {
     retryPrompt?: string | string[] | IMessage;
@@ -139,6 +139,7 @@ export class SimplePromptRecognizer implements IPromptRecognizer {
                         } 
                         break;
                     case PromptType.choice:
+                    case PromptType.interactive:
                         var best = entities.EntityRecognizer.findBestMatch(args.enumValues, text);
                         if (!best) {
                             var n = entities.EntityRecognizer.parseNumber(text);
@@ -192,7 +193,8 @@ export class Prompts extends dialog.Dialog {
         confirm: "I didn't understand. Please answer 'yes' or 'no'.",
         choice: "I didn't understand. Please choose an option from the list.", 
         time: "I didn't recognize the time you entered. Please try again.", 
-        attachment: "I didn't receive a file. Please try again."  
+        attachment: "I didn't receive a file. Please try again.",
+        interactive: "I didn't understand. Please try again."
     };
 
     public begin(session: ses.Session, args: IPromptArgs): void {
@@ -254,6 +256,8 @@ export class Prompts extends dialog.Dialog {
                         style = ListStyle.none;
                     }
                 }
+            } else if (args.promptType == PromptType.interactive) {
+                style = ListStyle.interactive;
             }
             
             // Get message message
@@ -282,6 +286,51 @@ export class Prompts extends dialog.Dialog {
                     }
                     msg.setText(session, prompt)
                        .addAttachment(a);
+                    break;
+                case ListStyle.interactive:
+                    var a: IAttachment = {actions: [], attachment_type: "default", callback_id: 'ia_' + new Date().getTime()};
+                    console.log('** ListStyle.interactive');
+
+                    for (var i = 0; i < session.dialogData.enumValues.length; i++) {
+                        var action = session.dialogData.enumValues[i];
+
+                        a.actions.push({
+                            name: action,
+                            text: action,
+                            type: 'button',
+                            style: 'default',
+                            value: action
+                        });
+                    }
+
+                    // Fallback text
+                    list = ' (';
+                    args.enumValues.forEach(function (value, index) {
+                        list += connector + (index + 1) + '. ' + value;
+                        if (index == args.enumValues.length - 2) {
+                            connector = index == 0 ? ' or ' : ', or ';
+                        }
+                        else {
+                            connector = ', ';
+                        }
+                    });
+                    list += ')';
+
+                    a.text = prompt;
+                    a.fallback = prompt + ' ' + list;
+                    a.mrkdwn_in = [
+                        'text',
+                        'fallback'
+                    ];
+                    a.replace_original = true;
+
+                    msg.setText(session, prompt);
+                    msg.setChannelData({
+                        text: '',
+                        fallback: list,
+                        mrkdwn: true,
+                        attachments: [a]
+                    });
                     break;
                 case ListStyle.inline:
                     list = ' (';
@@ -355,6 +404,22 @@ export class Prompts extends dialog.Dialog {
         args.enumValues = entities.EntityRecognizer.expandChoices(choices);
         beginPrompt(session, args);
     }
+
+    static interactive (session: ses.Session, prompt: string|string[]|IMessage, choices: string|Object|string[], options?: IPromptOptions): void {
+        if (choices instanceof Array && (choices as Array<string>).length > 5) {
+            // Prompts.interactive: Choices is an array and is more than 5, fallback to Prompts.choices
+            Prompts.choice(session, prompt, choices, options);
+        } else {
+            // Prompts.interactive: Proceed with normal Prompts.interactive implementation
+            var args: IPromptArgs = <any>options || {};
+            args.promptType = PromptType.interactive;
+            args.prompt = prompt;
+            args.listStyle = ListStyle.interactive;
+            args.enumValues = entities.EntityRecognizer.expandChoices(choices);
+            beginPrompt(session, args);
+        }
+    };
+
 
     static time(session: ses.Session, prompt: string|string[]|IMessage, options?: IPromptOptions): void {
         var args: IPromptArgs = <any>options || {};

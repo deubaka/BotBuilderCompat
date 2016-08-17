@@ -73,13 +73,27 @@ interface IAttachment {
     titleLink?: string;
     text?: string;
     thumbnailUrl?: string;
+
+    // Slack
+    attachment_type?: string;
+    callback_id?: string;
+    fallback?: string;
+    mrkdwn_in?: Array<string>;
+    replace_original?: boolean;
 }
 
 interface IAction {
     title?: string;
     message?: string;
     url?: string;
-    image?: string;    
+    image?: string;
+
+    // Slack
+    name?: string;
+    text?: string;
+    type?: string;
+    style?: string;
+    value?: string;  
 }
 
 interface IChannelAccount {

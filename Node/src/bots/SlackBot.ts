@@ -127,8 +127,9 @@ export class SlackBot extends collection.DialogCollection {
     constructor(private controller: BotKitController, private bot: Bot, options?: ISlackBotOptions) {
         super();
         this.configure(options);
-        ['message_received','bot_channel_join','user_channel_join','bot_group_join','user_group_join'].forEach((type) => {
+        ['message_received','bot_channel_join','user_channel_join','bot_group_join','user_group_join', 'interactive_message_received'].forEach((type) => {
             this.controller.on(type, (bot: Bot, msg: ISlackMessage) => {
+               console.log('** on emit: ' + type);
                this.emit(type, bot, msg); 
             });
         });
@@ -252,6 +253,33 @@ export class SlackBot extends collection.DialogCollection {
                 }
             }
         });
+
+        this.controller.on('interactive_message', (bot: Bot, msg: ISlackMessage) => {
+            // Conditionally dispatch the message
+            var key = msg.channel + ':' + msg.user;
+            console.log('** interactive_message: key=' + key);
+
+            if (sessions.hasOwnProperty(key)) {
+                // Validate session
+                var ss = sessions[key];
+
+                if (ss.callstack && ss.callstack.length > 0 && (new Date().getTime() - ss.lastAccess) <= this.options.ambientMentionDuration) {
+                    console.log('** interactive_message: existing, dispatch');
+
+                    dispatch(bot, msg, ss);
+                }
+                else {
+                    console.log('** interactive_message: invalid session, delete');
+                    delete sessions[key];
+                }
+            } else {
+                console.log('** interactive_message: no session, create');
+                // Session is not existing, so create a new one
+                var newSession = sessions[key] = {callstack: <any>[], lastAccess: new Date().getTime()};
+                dispatch(bot, msg, newSession);
+            }
+        });
+
         return this;
     }
 
