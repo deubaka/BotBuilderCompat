@@ -1,58 +1,64 @@
 # Bot Builder for Node.js
-[Bot Builder for Node.js](http://docs.botframework.com/builder/node/overview/) is a powerful framework for constructing bots that can handle both freeform interactions and more guided ones where the possibilities are explicitly shown to the user. It is easy to use and models frameworks like Express & Restify to provide developers with a familiar way to write Bots.
 
-High Level Features:
+Refer to Microsoft's Official [BotBuilder NodeJS rep](https://github.com/deubaka/BotBuilder/tree/compat/Node)o for more info.
 
-* Powerful dialog system with dialogs that are isolated and composable.
-* Built-in prompts for simple things like Yes/No, strings, numbers, enumerations.
-* Built-in dialogs that utilize powerful AI frameworks like [LUIS](http://luis.ai).
-* Bots are stateless which helps them scale.
-* Bots can run on almost any bot platform like the [Microsoft Bot Framework](http://botframework.com), [Skype](http://skype.com), and [Slack](http://slack.com).
- 
-## Build a bot
-Create a folder for your bot, cd into it, and run npm init.
+## Changes
+- Added `SlackBot.listenForMentionsAndDirectMessages` to allow queries to be received and processed on Direct Messages as well.
+- Added support for [Slack's Interactive Message Buttons](https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=1&cad=rja&uact=8&ved=0ahUKEwjonJXVysfOAhVDj5QKHbPdBt4QFggeMAA&url=https%3A%2F%2Fapi.slack.com%2Fdocs%2Fmessage-buttons&usg=AFQjCNFHC6txg6yCx6lztvPEVkwEuDpxmw) via `SlackBot.listenForMentionsAndDirectMessages` upon emit of `interactive_message` from `Botkit`'s `BotController`.
 
-    npm init
-    
-Get the BotBuilder and Restify modules using npm.
+## Usage
+### SlackBot.listenForMentionsAndDirectMessages
+```javascript
+var slackBotInstance = new BotBuilder.SlackBot(botController, bot);
+slackBotInstance.add('/', BotDialog);
+slackBotInstance.listenForMentionsAndDirectMessages();
+```
 
-    npm install --save botbuilder
-    npm install --save restify
-    
-Create a file named app.js and say hello in a few lines of code.
- 
-    var restify = require('restify');
-    var builder = require('botbuilder');
+Where in, `botController` is an instance of your `Botkit.slackbot` and `bot` is an instance of your instantiated bot.
 
-    // Create bot and add dialogs
-    var bot = new builder.BotConnectorBot({ appId: 'YourAppId', appSecret: 'YourAppSecret' });
-    bot.add('/', function (session) {
-        session.send('Hello World');
-    });
+### Slack Interactive Message Bridge
+Given an example `/slack_actions` running on Express.
 
-    // Setup Restify Server
-    var server = restify.createServer();
-    server.post('/api/messages', bot.verifyBotFramework(), bot.listen());
-    server.listen(process.env.port || 3978, function () {
-        console.log('%s listening to %s', server.name, server.url); 
-    });
+```javascript
+app.post('/slack_actions', function (req, res) {
+	if ('Your Slack Verification Token' === payload.token) {
+		var payload = JSON.parse(req.body.payload);
+		var message = payload;
+		
+		for (var key in req.body) {
+		    message[key] = req.body[key];
+		}
+		
+		message.user = message.user.id;
+		message.channel = message.channel.id;
+		
+		// We pass the value to process as respone for BotBuilder
+		message.text = message.actions[0].value;
+		
+		botController.findTeamById(message.team.id, function (err, team) {
+		    if (team) {
+		    	// Send a confirmation message for request not to timeout with Slack
+		        res.status(200);
+		        res.send(message.text + ' it is then! :robot_face:');
+		
+		        var bot = controller.spawn(team);
+		
+		        bot.team_info = team;
+		        bot.res = res;
+		
+		        message.type = 'message';
+		        message.source = 'interactive';
+		
+		        botController.trigger('interactive_message', [bot, message]);
+		    } else {
+		    	// Respond to message any way
+		        res.status(200);
+		        res.send('Oops! Something went wrong. Please try again.');
+		    }
+		});
+	}
+});
+```
 
-## Test your bot (Windows Only)
-Use the [Bot Framework Emulator](http://docs.botframework.com/connector/tools/bot-framework-emulator/) to test your bot on localhost. 
+Where in, `botController` is an instance of your `Botkit.slackbot`.
 
-Install the emulator from [here](http://aka.ms/bf-bc-emulator) and then start your bot in a console window.
-
-    node app.js
-    
-Start the emulator and say "hello" to your bot.
-
-## Publish your bot
-Deploy your bot to the cloud and then [register it](http://docs.botframework.com/connector/getstarted/#registering-your-bot-with-the-microsoft-bot-framework) with the Microsoft Bot Framework. If you're deploying your bot to Microsoft Azure you can use this great guide for [Publishing a Node.js app to Azure using Continuous Integration](https://blogs.msdn.microsoft.com/sarahsays/2015/08/31/building-your-first-node-js-app-and-publishing-to-azure/).
-
-NOTE: When you register your bot with the Bot Framework you'll want to update the appId & appSecret for both your bot and the emulator with the values assigned to you by the portal.
-
-## Dive deeper
-Learn how to build great bots.
-
-* [Core Concepts Guide](http://docs.botframework.com/builder/node/guides/core-concepts/)
-* [Bot Builder for Node.js Reference](http://docs.botframework.com/sdkreference/nodejs/modules/_botbuilder_d_.html)
