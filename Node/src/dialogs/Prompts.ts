@@ -54,6 +54,7 @@ export interface IPromptArgs extends IPromptOptions {
     promptType: PromptType;
     prompt: string | string[] | IMessage;
     enumValues?: string[];
+    attachments?: Array<any>;
 }
 
 export interface IPromptResult<T> extends dialog.IDialogResult<T> {
@@ -322,14 +323,26 @@ export class Prompts extends dialog.Dialog {
                         'text',
                         'fallback'
                     ];
-                    a.replace_original = true;
+
+                    var attachments: Array<any> = [];
+
+                    if (args.attachments && args.attachments instanceof Array) {
+                        try {
+                            attachments = args.attachments.concat(a);
+                        } catch (e) {
+                            attachments.push(a);
+                        }
+                    } else {
+                        attachments.push(a);
+                    }
+
 
                     msg.setText(session, prompt);
                     msg.setChannelData({
                         text: '',
                         fallback: list,
                         mrkdwn: true,
-                        attachments: [a]
+                        attachments: attachments
                     });
                     break;
                 case ListStyle.inline:
