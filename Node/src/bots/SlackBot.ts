@@ -241,15 +241,28 @@ export class SlackBot extends collection.DialogCollection {
             });
         });
         this.controller.on('ambient', (bot: Bot, msg: ISlackMessage) => {
-            // Conditionally dispatch the message
-            var key = msg.channel + ':' + msg.user;
-            if (sessions.hasOwnProperty(key)) {
-                // Validate session
-                var ss = sessions[key];
-                if (ss.callstack && ss.callstack.length > 0 && (new Date().getTime() - ss.lastAccess) <= this.options.ambientMentionDuration) {
-                    dispatch(bot, msg, ss);
-                } else {
-                    delete sessions[key];
+            var findings = msg.text.match(/<@U[\w]*>/gi);
+            
+            var hasNoMentions = false;
+            if (findings && findings.length > 0) {
+                // If has mentions, ignore
+                hasNoMentions = false;
+            } else {
+                // Ambient with no mentions
+                hasNoMentions = true;
+            }
+
+            if (hasNoMentions) {
+                // Conditionally dispatch the message
+                var key = msg.channel + ':' + msg.user;
+                if (sessions.hasOwnProperty(key)) {
+                    // Validate session
+                    var ss = sessions[key];
+                    if (ss.callstack && ss.callstack.length > 0 && (new Date().getTime() - ss.lastAccess) <= this.options.ambientMentionDuration) {
+                        dispatch(bot, msg, ss);
+                    } else {
+                        delete sessions[key];
+                    }
                 }
             }
         });
