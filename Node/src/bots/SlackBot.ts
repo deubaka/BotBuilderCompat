@@ -284,6 +284,10 @@ export class SlackBot extends collection.DialogCollection {
                 else {
                     console.log('** interactive_message: invalid session, delete');
                     delete sessions[key];
+
+                    // Non existing session, delete, then create a new one
+                    var newSession = sessions[key] = {callstack: <any>[], lastAccess: new Date().getTime()};
+                    dispatch(bot, msg, newSession);
                 }
             } else {
                 console.log('** interactive_message: no session, create');
